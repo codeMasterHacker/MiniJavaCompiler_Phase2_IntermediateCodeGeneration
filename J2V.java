@@ -16,12 +16,14 @@ public class J2V
             Goal root = mjp.Goal();
             root.accept(new SymbolTableVisitor(), goalEntry); //builds symbol table
 
-            ClassesMap map = new ClassesMap(); //wrapper class to keep main function clean
+            ClassesMapManager mapManager = new ClassesMapManager(); 
 
-            goalEntry.build_classesMap(map.classesMap); //use symbol table to build classesMap
-            map.printMap();
+            goalEntry.build_classesMap(mapManager.classesMap); //use symbol table to build classesMap
+
+            root.accept(new VaporVisitor(mapManager), goalEntry);
 
             //root.accept(new TypeCheckerVisitor(), goalEntry);
+            //mapManager.printMap();
             //goalEntry.print();
         }
         catch (ParseException e) 

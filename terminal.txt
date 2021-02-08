@@ -1,3 +1,3 @@
-javac J2V.java
-java J2V < /home/enrique/Desktop/miniJava/phase2/phase1-tests/BubbleSort.java
-find /home/enrique/Desktop/miniJava/phase2 -type f -name "*.class" -delete
+javac J2V.javac
+java J2V < /Users/Enrique/Desktop/MiniJavaCompiler_Phase2_IntermediateCodeGeneration/phase1-tests/TreeVisitor.java
+find /Users/Enrique/Desktop/MiniJavaCompiler_Phase2_IntermediateCodeGeneration/ -type f -name "*.class" -delete
