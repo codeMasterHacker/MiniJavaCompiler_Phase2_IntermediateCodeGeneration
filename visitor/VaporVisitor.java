@@ -12,9 +12,14 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
     ClassesMapManager classesMap_manager;
     StringBuilder vaporCode;
 
-    int indentationCount = 0;
     int ifCount = 1;
-    int whileCount = 1;
+    int indentationCount = 0;
+    int whileCount = 0;
+    int localVarCount = 0;
+    int expressionResult = 0;
+    int andCount = 0;
+    int notCount = 0;
+    
 
     public VaporVisitor(ClassesMapManager mM)
     {
@@ -33,7 +38,7 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
         n.f0.accept(this, goal); //* f0 -> MainClass()
         n.f1.accept(this, goal); //* f1 -> ( TypeDeclaration() )*
 
-        System.out.println(vaporCode.toString()); //prints the trnslated vapor code
+        System.out.println(vaporCode.toString()); //prints the translated vapor code
 
         return "";
     }
@@ -321,6 +326,8 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
         return ret;
     }
 
+    /////////////////////////////////////////////////////////////TODO -- expresions return a string
+
     /**
     * f0 -> Identifier()
     * f1 -> "="
@@ -466,19 +473,49 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
     * f6 -> Statement()
     */
     @Override
-    public String visit(IfStatement n, SymbolTableEntry methodEntry) //TODO
+    public String visit(IfStatement n, SymbolTableEntry methodEntry)
     {
-        String bool = n.f2.accept(this, methodEntry); //* f2 -> Expression()
+        Expression expression = n.f2;
+        Statement ifTrue = n.f4;
+        Statement ifFalse = n.f6;
+
+        String bool = expression.accept(this, methodEntry); //* f2 -> Expression()
+
+        String trueBranch = "if_true_" + ifCount + "\n";
+        String gotoEnd = "goto :if_end_" + ifCount + "\n";
+        String ifCondition = "if " + bool + " goto :if_true_" + ifCount + "\n";
 
         for (int i = 0; i < indentationCount; i++)
             vaporCode.append(" ");
-        vaporCode.append("if0 " + bool + " goto :if" + ifCount + "_else\n");
+        vaporCode.append(ifCondition);
+        indentationCount += 2;
 
-        n.f4.accept(this, methodEntry); //* f4 -> Statement()
+        ifFalse.accept(this, methodEntry);
 
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append(gotoEnd);
+        if (indentationCount > 1)
+            indentationCount -= 2;
 
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append(trueBranch);
+        indentationCount += 2;
 
-        n.f6.accept(this, methodEntry); //* f6 -> Statement()
+        ifTrue.accept(this, methodEntry);
+
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append(gotoEnd);
+        if (indentationCount > 1)
+            indentationCount -= 2;
+
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("if_end_:" + ifCount + "\n");
+
+        ifCount++;
 
         return "";
     }
@@ -491,26 +528,35 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
     * f4 -> Statement()
     */
     @Override
-    public String visit(WhileStatement n, SymbolTableEntry methodEntry) //TODO
+    public String visit(WhileStatement n, SymbolTableEntry methodEntry)
     {
-        //bool can be a variable or a type
-        String bool = n.f2.accept(this, methodEntry); //* f2 -> Expression()
+        Expression condition = n.f2;
+        Statement statement = n.f4;
 
-        for (int i = 0; i < indentationCount; i ++)
+        for (int i = 0; i < indentationCount; i++)
             vaporCode.append(" ");
-        vaporCode.append("while" + whileCount + "_top:\n");
-        vaporCode.append("if0 " + bool + " goto :while" + whileCount + "_end:\n");
+        vaporCode.append("while_top_" + whileCount + ":\n");
+
+        String bool = condition.accept(this, methodEntry);
+
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("if0 " + bool + " goto :while_end_" + whileCount + "\n");
         indentationCount += 2;
 
-        
+        statement.accept(this, methodEntry);
 
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("goto :while_end_" + whileCount + "\n");
+        if (indentationCount > 1)
+            indentationCount -= 2;
 
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("while_end_" + whileCount + ":\n");
 
-
-
-
-
-        n.f4.accept(this, methodEntry); //* f4 -> Statement()
+        whileCount++;
 
         return "";
     }
@@ -560,41 +606,48 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
     @Override
     public String visit(AndExpression n, SymbolTableEntry argu) 
     {
-        String bool1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
-        String bool2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        //String bool1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        //String bool2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
 
-        SymbolTableEntry entry;
-        String type;
+        n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
 
-        entry = argu.get_tableEntry(bool1);
+        String lhsVar = "t." + localVarCount++;
+        String rhsVar = "t." + localVarCount++;
 
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = bool1;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("result" + expressionResult++ + " = 1\n");
 
-        if (!type.equals("boolean"))
-        {
-            System.out.println("\nType Checking Error at And && Expression");
-            System.out.println("The left hand side of the && expression evaulates to type '" + type + "'");
-            System.out.println("The left hand side of the && expression must evaulate to type 'boolean'");
-        }
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("if0 " + lhsVar + " goto :set_false_" + andCount + "\n");
 
-        entry = argu.get_tableEntry(bool2);
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("if0 " + rhsVar + " goto :set_false_" + andCount + "\n");
 
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = bool2;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("goto :end_and_" + andCount + "\n");
 
-        if (!type.equals("boolean"))
-        {
-            System.out.println("\nType Checking Error at And && Expression");
-            System.out.println("The right hand side of the && expression evaulates to type '" + type + "'");
-            System.out.println("The right hand side of the && expression must evaulate to type 'boolean'");
-        }
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("set_false_" + andCount + ":\n");
+        indentationCount += 2;
 
-        //return "";
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("result" + expressionResult++ + " = 0\n");
+        if (indentationCount > 1)
+            indentationCount -= 2;
+
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("end_and_" + andCount + "\n");
+
+        andCount++;
+
         return "boolean"; //because a logical and && is either true or false
     }
 
@@ -606,39 +659,17 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
     @Override
     public String visit(CompareExpression n, SymbolTableEntry argu) 
     {
-        String int1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
-        String int2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        //String int1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        //String int2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
 
-        SymbolTableEntry entry;
-        String type;
+        String lhsVar = "t." + localVarCount++;
+        String rhsVar = "t." + localVarCount++;
 
-        entry = argu.get_tableEntry(int1);
-
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = int1;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("int"))
-        {
-            System.out.println("\nType Checking Error at Compare Expression");
-            System.out.println("The left hand side of the < expression evaulates to type '" + type + "'");
-            System.out.println("The left hand side of the < expression must evaulate to type 'int'");
-        }
-
-        entry = argu.get_tableEntry(int2);
-
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = int2;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("int"))
-        {
-            System.out.println("\nType Checking Error at Compare Expression");
-            System.out.println("The right hand side of the < expression evaulates to type '" + type + "'");
-            System.out.println("The right hand side of the < expression must evaulate to type 'int'");
-        }
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("result" + expressionResult++ + " = Lts(" + lhsVar + " " + rhsVar + ")\n");
 
         //return "";
         return "boolean"; //because a comparision is either true or false
@@ -652,39 +683,17 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
     @Override
     public String visit(PlusExpression n, SymbolTableEntry argu) 
     {
-        String int1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
-        String int2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        //String int1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        //String int2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
 
-        SymbolTableEntry entry;
-        String type;
+        String lhsVar = "t." + localVarCount++;
+        String rhsVar = "t." + localVarCount++;
 
-        entry = argu.get_tableEntry(int1);
-
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = int1;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("int"))
-        {
-            System.out.println("\nType Checking Error at Plus Expression");
-            System.out.println("The left hand side of the + expression evaulates to type '" + type + "'");
-            System.out.println("The left hand side of the + expression must evaulate to type 'int'");
-        }
-
-        entry = argu.get_tableEntry(int2);
-
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = int2;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("int"))
-        {
-            System.out.println("\nType Checking Error at Plus Expression");
-            System.out.println("The right hand side of the + expression evaulates to type '" + type + "'");
-            System.out.println("The right hand side of the + expression must evaulate to type 'int'");
-        }
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("result" + expressionResult++ + " = Add(" + lhsVar + " " + rhsVar + ")\n");
 
         //return "";
         return "int"; //because we can only add integers
@@ -698,39 +707,17 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
     @Override
     public String visit(MinusExpression n, SymbolTableEntry argu) 
     {
-        String int1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
-        String int2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        //String int1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        //String int2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
 
-        SymbolTableEntry entry;
-        String type;
+        String lhsVar = "t." + localVarCount++;
+        String rhsVar = "t." + localVarCount++;
 
-        entry = argu.get_tableEntry(int1);
-
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = int1;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("int"))
-        {
-            System.out.println("\nType Checking Error at Minus Expression");
-            System.out.println("The left hand side of the - expression evaulates to type '" + type + "'");
-            System.out.println("The left hand side of the - expression must evaulate to type 'int'");
-        }
-
-        entry = argu.get_tableEntry(int2);
-
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = int2;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("int"))
-        {
-            System.out.println("\nType Checking Error at Minus Expression");
-            System.out.println("The right hand side of the - expression evaulates to type '" + type + "'");
-            System.out.println("The right hand side of the - expression must evaulate to type 'int'");
-        }
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("result" + expressionResult++ + " = Sub(" + lhsVar + " " + rhsVar + ")\n");
 
         //return "";
         return "int"; //because we can only subtract integers
@@ -745,39 +732,17 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
     public String visit(TimesExpression n, SymbolTableEntry argu) 
     {
         //can a variable or an int type
-        String int1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
-        String int2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        //String int1 = n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        //String int2 = n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
+        n.f0.accept(this, argu); //* f0 -> PrimaryExpression()
+        n.f2.accept(this, argu); //* f2 -> PrimaryExpression()
 
-        SymbolTableEntry entry;
-        String type;
+        String lhsVar = "t." + localVarCount++;
+        String rhsVar = "t." + localVarCount++;
 
-        entry = argu.get_tableEntry(int1);
-
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = int1;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("int"))
-        {
-            System.out.println("\nType Checking Error at Times Expression");
-            System.out.println("The left hand side of the * expression evaulates to type '" + type + "'");
-            System.out.println("The left hand side of the * expression must evaulate to type 'int'");
-        }
-
-        entry = argu.get_tableEntry(int2);
-
-        if (entry == null) //the variable name doesn't exist, so must be a type
-            type = int2;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("int"))
-        {
-            System.out.println("\nType Checking Error at Times Expression");
-            System.out.println("The right hand side of the * expression evaulates to type '" + type + "'");
-            System.out.println("The right hand side of the * expression must evaulate to type 'int'");
-        }
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("result" + expressionResult++ + " = MulS(" + lhsVar + " " + rhsVar + ")\n");
 
         //return "";
         return "int"; //because we can only mutliply integers
@@ -1084,20 +1049,9 @@ public class VaporVisitor implements GJVisitor<String, SymbolTableEntry>
         //can be a method name or variable name or type
         String bool = n.f1.accept(this, argu);//* f1 -> Expression()
 
-        SymbolTableEntry entry = argu.get_tableEntry(bool);
-        String type;
-
-        if (entry == null) //the method name or variable name doesn't exist, so must be a type
-            type = bool;
-        else //the method name or variable name exists, so check its type
-            type = entry.type;
-
-        if (!type.equals("boolean"))
-        {
-            System.out.println("\nType Checking Error at Not Expression");
-            System.out.println("The expression is of type '" + type + "'");
-            System.out.println("The expression must be of type 'boolean'");
-        }
+        for (int i = 0; i < indentationCount; i++)
+            vaporCode.append(" ");
+        vaporCode.append("if0 " + bool + " goto :" + );
 
         return bool;
     }
